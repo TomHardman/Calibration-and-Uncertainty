@@ -1,13 +1,18 @@
 import argparse
 import os
 from difflib import SequenceMatcher
+from xml.dom import INDEX_SIZE_ERR
 
 import Levenshtein
 import numpy as np
 from tqdm import tqdm
 
-from helpers import write_lines, read_parallel_lines, encode_verb_form, \
-    apply_reverse_transformation, SEQ_DELIMETERS, START_TOKEN
+try:
+    from helpers import write_lines, read_parallel_lines, encode_verb_form, \
+        apply_reverse_transformation, SEQ_DELIMETERS, START_TOKEN
+except:
+    from utils.helpers import write_lines, read_parallel_lines, encode_verb_form, \
+        apply_reverse_transformation, SEQ_DELIMETERS, START_TOKEN
 
 
 def perfect_align(t, T, insertions_allowed=0,
@@ -184,7 +189,7 @@ def apply_transformation(source_token, target_token):
     return None
 
 
-def align_sequences(source_sent, target_sent):
+def align_sequences(source_sent, target_sent, sent_edits = False):
     # check if sent is OK
     if not is_sent_ok(source_sent) or not is_sent_ok(target_sent):
         return None
@@ -230,6 +235,8 @@ def align_sequences(source_sent, target_sent):
     labels = convert_edits_into_labels(source_tokens, all_edits)
     # match tags to source tokens
     sent_with_tags = add_labels_to_the_tokens(source_tokens, labels)
+    if sent_edits:
+        return sent_with_tags, all_edits
     return sent_with_tags
 
 
@@ -366,6 +373,88 @@ def convert_data_from_raw_files(source_file, target_file, output_file, chunk_siz
     if tagged:
         write_lines(output_file, tagged, 'a')
 
+def my_predict_sing_stc(stc, model):
+    '''
+    predict single sentence, return output sentence, probability lists and index list
+    '''
+    batch = [stc.split()]
+    sequences = model.preprocess(batch)
+
+    probabilities, idxs, error_probs = model.predict(sequences)
+
+    pred_batch = model.postprocess_batch(batch, probabilities,
+                                        idxs, error_probs)
+
+    result_line = [" ".join(x) for x in pred_batch]
+
+    return result_line[0] ,probabilities[0], idxs[0]
+
+def my_get_prob_edits(source_file, target_file, model):
+    '''
+    input: source file and target file path, model
+    output: alignments(edits), probability and true label
+    '''
+    source_data, target_data = read_parallel_lines(source_file, target_file)
+    vocab = model.vocab
+
+    edits=[]
+    probs=[]
+    true_labels=[]
+
+    for source_sent, target_sent in tqdm(zip(source_data, target_data)):
+        pred_sent, probabilities, idxs = my_predict_sing_stc(source_sent, model) # make predictions
+        # print("prob: {}, idxs: {}".format(probabilities, idxs))
+
+        edits_pred = [[(i-1,i),vocab.get_token_from_index(idxs[i], namespace = 'labels')] for i in range(len(idxs)) if idxs[i] != 0 ]
+        edits_idx = [i for i in range(len(idxs)) if idxs[i] != 0 ]
+        probabilities = [probabilities[i] for i in edits_idx]
+        # print("test: "+source_sent)
+        # print("target: "+target_sent)
+        # print("prediction: "+pred_sent)
+        # print("probabilities of edits: {}, edit idx: {}".format(probabilities, edits_idx))
+
+        try:
+            _, edits_tgt = align_sequences(source_sent, target_sent, True)
+            
+        except Exception:
+            _, edits_tgt = align_sequences(source_sent, target_sent, True)
+
+        print(edits_tgt)
+        print(edits_pred)
+
+        print(len(edits_pred))
+        
+        for i in range(len(edits_pred)):
+            pred_e = edits_pred[i]
+            prob = probabilities[i]
+            # if pred_e[1] == '@@UNKNOWN@@':
+            #     print(idxs[edits_idx[i]])
+            #     print("test: "+source_sent)
+            #     print("target: "+target_sent)
+            #     print("prediction: "+pred_sent)
+        
+            if any(my_equal_edits(e, pred_e) for e in edits_tgt):
+                edits.append(pred_e)
+                probs.append(prob)
+                true_labels.append(1) 
+            else:
+                edits.append(pred_e)
+                probs.append(prob)
+                true_labels.append(0)
+
+        for tgt_e in edits_tgt:
+            if not any(my_equal_edits(e, tgt_e) for e in edits_pred):
+                edits.append(tgt_e)
+                probs.append(0)
+                true_labels.append(1)
+
+    return edits, probs, true_labels
+
+def my_equal_edits(edit1, edit2):
+    return edit1[0] == edit2[0] and edit1[1] == edit2[1]
+
+def check_fn(edit1, edit2):
+    return edit1[0] == edit2[0]
 
 def convert_labels_into_edits(labels):
     all_edits = []

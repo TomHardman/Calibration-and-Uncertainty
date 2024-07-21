@@ -1,6 +1,7 @@
 import argparse
 import os
 from random import seed
+import sys
 
 import torch
 from allennlp.data.iterators import BucketIterator
@@ -306,6 +307,10 @@ if __name__ == '__main__':
                         type=int,
                         help='Whether to fix problem with [CLS], [SEP] tokens tokenization.',
                         default=1)
+    if not os.path.isdir('CMDs'):
+        os.mkdir('CMDs')
+    with open('CMDs/train.cmd', 'a') as f:
+        f.write(' '.join(sys.argv)+'\n')
 
     args = parser.parse_args()
     main(args)

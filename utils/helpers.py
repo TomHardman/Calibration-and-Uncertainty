@@ -246,3 +246,21 @@ def normalize(sent):
     for fr, to in REPLACEMENTS.items():
         sent = sent.replace(fr, to)
     return sent.lower()
+
+
+def find_punc_indices(tags_path):
+    '''
+    Used to find the indices of punctuation and capitalisation tags so that
+    these edits can be ignored when suggested for speech data
+    '''
+    punc_indices = []
+    tag_lines = read_lines(tags_path)
+    
+    for i, tag in enumerate(tag_lines):
+        if tag.split('_')[0] == '$APPEND' and not any([tag.split('_')[1][i].isalpha() for i in range(len(tag.split('_')[1]))]):
+            punc_indices.append(i)
+    
+        elif tag.split('_')[0] == '$TRANSFORM' and tag.split('_')[1] == 'CASE':
+            punc_indices.append(i)
+    
+    return punc_indices

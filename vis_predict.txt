@@ -1,0 +1,7 @@
+python visualise_predictions.py --model_path ../trained_models/xlnet_0_gectorv2.th --vocab_path data/output_vocabulary --input_file ../data/CoNLL-14/conll14st-test-data/noalt/input_sentences.txt --output_file experiments/prediction_files/conll/xlnet_prob.pred --transformer_model xlnet --special_tokens_fix 0
+
+python visualise_predictions.py --model_path ../trained_models/xlnet_0_gectorv2.th ../trained_models/bert_0_gectorv2.th --vocab_path data/output_vocabulary --input_file ../data/CoNLL-14/conll14st-test-data/noalt/input_sentences.txt --output_file experiments/prediction_files/conll/xlnet_prob.pred --transformer_model xlnet --special_tokens_fix 0 --is_ensemble 1
+
+python visualise_predictions.py --model_path ../trained_models/xlnet_0_gectorv2.th --vocab_path data/output_vocabulary --input_file ../data/FCE/fce-public.test.inc --output_file experiments/prediction_files/conll/xlnet_prob.pred --transformer_model xlnet --special_tokens_fix 0 --speech 0
+
+python visualise_predictions.py --model_path ../trained_models/xlnet_0_gectorv2.th --vocab_path data/output_vocabulary --input_file ../data/FCE/fce-public.test.inc --output_file experiments/prediction_files/conll/xlnet_prob.pred --transformer_model xlnet --special_tokens_fix 0 --speech 1

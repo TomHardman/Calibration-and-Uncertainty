@@ -16,7 +16,7 @@ from allennlp.nn import util
 from gector.bert_token_embedder import PretrainedBertEmbedder
 from gector.seq2labels_model import Seq2Labels
 from gector.tokenizer_indexer import PretrainedBertIndexer
-from utils.helpers import PAD, UNK, get_target_sent_by_edits, START_TOKEN
+from utils.helpers import PAD, UNK, get_target_sent_by_edits, START_TOKEN, find_punc_indices
 from utils.helpers import get_weights_name
 
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -109,7 +109,7 @@ class GecBERTModel(object):
                     continue
         print("Model is restored", file=sys.stderr)
 
-    def predict(self, batches):
+    def predict(self, batches, return_logits=False):
         t11 = time()
         predictions = []
         for batch, model in zip(batches, self.models):
@@ -118,10 +118,15 @@ class GecBERTModel(object):
                 prediction = model.forward(**batch)
             predictions.append(prediction)
 
+        logit_labels = [predictions[i]['logits_labels'] for i in range(len(predictions))]  # added in this so logits can be returned using predict method
         preds, idx, error_probs = self._convert(predictions)
         t55 = time()
         if self.log:
             print(f"Inference time {t55 - t11}")
+        
+        if return_logits:
+            return preds, idx, error_probs, logit_labels
+
         return preds, idx, error_probs
 
     def get_token_action(self, token, index, prob, sugg_token):
@@ -296,3 +301,50 @@ class GecBERTModel(object):
                 break
 
         return final_batch, total_updates
+
+
+class GECBERTModelSpeech(GecBERTModel):
+    def __init__(self, vocab_path=None, model_paths=None,
+                 weigths=None,
+                 max_len=50,
+                 min_len=3,
+                 lowercase_tokens=False,
+                 log=False,
+                 iterations=3,
+                 model_name='roberta',
+                 special_tokens_fix=1,
+                 is_ensemble=True,
+                 min_error_probability=0.0,
+                 confidence=0,
+                 del_confidence=0,
+                 resolve_cycles=False,
+                 ):
+        super().__init__(vocab_path=vocab_path, model_paths=model_paths,
+                 weigths=weigths, max_len=max_len, min_len=min_len, lowercase_tokens=lowercase_tokens,
+                 log=log, iterations=iterations, model_name=model_name, special_tokens_fix=special_tokens_fix,
+                 is_ensemble=is_ensemble, min_error_probability=min_error_probability, confidence=confidence,
+                 del_confidence=del_confidence, resolve_cycles=resolve_cycles,)
+        
+        self.tags_path = vocab_path + '/labels.txt'
+        self.punc_indices = find_punc_indices(self.tags_path)
+    
+    def _convert(self, data):
+        all_class_probs = torch.zeros_like(data[0]['class_probabilities_labels'])
+        error_probs = torch.zeros_like(data[0]['max_error_probability'])
+        for output, weight in zip(data, self.model_weights):
+            all_class_probs += weight * output['class_probabilities_labels'] / sum(self.model_weights)
+            error_probs += weight * output['max_error_probability'] / sum(self.model_weights)
+
+        all_class_probs = self.remove_punctuation_edits(all_class_probs)
+        max_vals = torch.max(all_class_probs, dim=-1)
+        probs = max_vals[0].tolist()
+        idx = max_vals[1].tolist()
+        return probs, idx, error_probs.tolist()
+    
+    def remove_punctuation_edits(self, class_probabilities):
+        indices = self.punc_indices
+        class_probabilities[:, :, 0] += class_probabilities[:, :, indices].sum(dim=-1)
+        class_probabilities[:, :, indices] = 0
+        return class_probabilities
+
+        

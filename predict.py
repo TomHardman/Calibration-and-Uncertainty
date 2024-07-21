@@ -6,7 +6,7 @@ import argparse
 import sys
 import os
 from utils.helpers import read_lines, normalize
-from gector.gec_model import GecBERTModel
+from gector.gec_model import GecBERTModel, GECBERTModelSpeech
 
 
 def predict_for_file(input_file, output_file, model, batch_size=32, to_normalize=False):
@@ -36,20 +36,37 @@ def predict_for_file(input_file, output_file, model, batch_size=32, to_normalize
 
 
 def main(args):
+    speech = args.speech
     # get all paths
-    model = GecBERTModel(vocab_path=args.vocab_path,
-                         model_paths=args.model_path,
-                         max_len=args.max_len, min_len=args.min_len,
-                         iterations=args.iteration_count,
-                         min_error_probability=args.min_error_probability,
-                         lowercase_tokens=args.lowercase_tokens,
-                         model_name=args.transformer_model,
-                         special_tokens_fix=args.special_tokens_fix,
-                         log=False,
-                         confidence=args.additional_confidence,
-                         del_confidence=args.additional_del_confidence,
-                         is_ensemble=args.is_ensemble,
-                         weigths=args.weights)
+    if not speech:
+        model = GecBERTModel(vocab_path=args.vocab_path,
+                            model_paths=args.model_path,
+                            max_len=args.max_len, min_len=args.min_len,
+                            iterations=args.iteration_count,
+                            min_error_probability=args.min_error_probability,
+                            lowercase_tokens=args.lowercase_tokens,
+                            model_name=args.transformer_model,
+                            special_tokens_fix=args.special_tokens_fix,
+                            log=False,
+                            confidence=args.additional_confidence,
+                            del_confidence=args.additional_del_confidence,
+                            is_ensemble=args.is_ensemble,
+                            weigths=args.weights)
+    
+    else:
+        model = GECBERTModelSpeech(vocab_path=args.vocab_path,
+                                     model_paths=args.model_path,
+                                     max_len=args.max_len, min_len=args.min_len,
+                                     iterations=args.iteration_count,
+                                     min_error_probability=args.min_error_probability,
+                                     lowercase_tokens=args.lowercase_tokens,
+                                     model_name=args.transformer_model,
+                                     special_tokens_fix=args.special_tokens_fix,
+                                     log=False,
+                                     confidence=args.additional_confidence,
+                                     del_confidence=args.additional_del_confidence,
+                                     is_ensemble=args.is_ensemble,
+                                     weigths=args.weights)
 
     cnt_corrections = predict_for_file(args.input_file, args.output_file, model,
                                        batch_size=args.batch_size, 
@@ -100,7 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('--iteration_count',
                         type=int,
                         help='The number of iterations of the model.',
-                        default=5)
+                        default=1)
     parser.add_argument('--additional_confidence',
                         type=float,
                         help='How many probability to add to $KEEP token.',
@@ -129,12 +146,19 @@ if __name__ == '__main__':
     parser.add_argument('--normalize',
                         help='Use for text simplification.',
                         action='store_true')
+    parser.add_argument('--speech',
+                         help='Use model amended for speech data',
+                         type=int,
+                         default=0)
     args = parser.parse_args()
 
     # Save the command run
-    if not os.path.isdir('CMDs'):
-        os.mkdir('CMDs')
-    with open('CMDs/predict.cmd', 'a') as f:
-        f.write(' '.join(sys.argv)+'\n')
+    try:
+        if not os.path.isdir('CMDs'):
+            os.mkdir('CMDs')
+        with open('CMDs/predict.cmd', 'a') as f:
+            f.write(' '.join(sys.argv)+'\n')
+    except PermissionError:
+        pass
 
     main(args)

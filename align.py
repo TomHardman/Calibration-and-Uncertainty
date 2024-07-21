@@ -38,20 +38,62 @@ def get_sentences_dict(data_path):
         id2text[id] = text
     return id2text
 
-def align_data(inc_dict, pred_dict, corr_dict):
+
+def get_sentences_dict_no_path(lines):
+    lines = [l.rstrip('\n') for l in lines]
+    id2text = {}
+    for l in lines:
+        parts = l.split()
+        id = parts[0]
+        text = ' '.join(parts[1:])
+        id2text[id] = text
+    return id2text
+
+
+def align_data(inc_dict, pred_dict, corr_dict, corr_inp_dict=None, spoken_gec=False):
     inc_sens = []
     pred_sens = []
     corr_sens = []
+
+    if spoken_gec:
+        corr_inp_sens = []
+
     for i, (id, text) in enumerate(corr_dict.items()):
         try:
             pred_sens.append(pred_dict[id]+'\n')
             inc_sens.append(inc_dict[id]+'\n')
+            if spoken_gec:
+                corr_inp_sens.append(corr_inp_dict[id]+'\n')
             corr_sens.append(text+'\n')
         except:
-            # print(f'{i}) {id} in corrected but not in predicted')
             pass
     assert len(pred_sens) == len(inc_sens), "Mismatch in num items"
-    return inc_sens, pred_sens, corr_sens
+
+    if spoken_gec:
+        return inc_sens, pred_sens, corr_sens, corr_inp_sens
+    else:
+        return inc_sens, pred_sens, corr_sens
+
+
+def align_no_file(source_sent, pred_sent, corr_sent, trans_inp_sent=None, spoken_gec=False):
+    '''If using for spoken GEC, source_sent refers to ASR output and trans_inp_sent
+    refers to the manual transcription. Returns sentences in aligned form'''
+
+    # Get sentences and align
+    inc_id2text = get_sentences_dict_no_path(source_sent)
+    pred_id2text = get_sentences_dict_no_path(pred_sent)
+    corr_id2text = get_sentences_dict_no_path(corr_sent)
+
+    if spoken_gec:
+        corr_inp_id2text = get_sentences_dict_no_path(trans_inp_sent)
+        inc_sens, pred_sens, corr_sens, corr_inp_sens = align_data(inc_id2text, pred_id2text, corr_id2text,
+                                                                   corr_inp_id2text, spoken_gec=True)
+        return inc_sens, pred_sens, corr_sens, corr_inp_sens
+
+    else:
+        inc_sens, pred_sens, corr_sens = align_data(inc_id2text, pred_id2text, corr_id2text)
+        return inc_sens, pred_sens, corr_sens
+
 
 if __name__ == "__main__":
 
